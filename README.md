@@ -44,6 +44,37 @@ coinvert mine auto-api can be placed in a cron job to poll and switch the miner 
 See script for operation, but is called by install to clone, configure and make a miner.
 
 
+API based auto-switching:
+=========================
+
+Probably the best feature of coinvert is its ability to automatically switch from one algoryth (say scrypt) to another (nscrypt) based upon score information retrieved from a JSON based api URL.
+
+At the top of the coinvert script are the settings which define the JSON API URL, the delta and the jq queries used to grab both the algorythm type and score at your pool ( if your pool supports multiple algorythm rankins with api, which mine does -- props to TradeMyBit -- ):
+
+
+    DELTA="25"
+
+Sets DELTA, the difference between the algorythms score that must be achieved before a change in algorythm takes place.
+
+    API_URL="https://pool.trademybit.com/api/bestalgo?key=xxxx"
+
+URL to pool api which contains the high score for each respective algorythm.
+
+    JQ_ALGO0=".[0] | .algo"
+    JQ_SCOR0=".[0] | .score"
+    JQ_ALGO1=".[1] | .algo"
+    JQ_SCOR1=".[1] | .score"
+
+Lastly a set of 4 jq queries that tell coinvert how to parse out the algorythms and scores.
+
+Once configured it can be tested with the command "coinvert mine autoapi", and finally placed into a cron job in /etc/cron.d/coinvert for exmaple:
+
+    # /etc/cron.d/coinvert: crontab fragment for coinvert
+    #  This will run the cronjob script for coinvert to automatically switch between miner types.
+    */5 * * * * root /opt/coinvert/coinvert mine autoapi >> /opt/coinvert/coinvert.log
+
+In this case I am also logging coinvert's actions to a log file in /opt/coinvert/coinvert.log (optional).
+
 Installation:
 =============
 
@@ -93,5 +124,5 @@ Sample:
     2014-03-01 08:11:41+00:00 [INFO] Killing miner process 32054
     2014-03-01 08:11:46+00:00 [INFO] Miner started (PID: 3498)
     root@bamt-miner:~# coinvert mine scrypt
-    2014-03-01 08:16:41+00:00 [INFO] Currently mining scrypt, nothing to do.
+    2014-03-01 08:16:41+00:00 [INFO] Currently mining nscrypt, nothing to do.
     root@bamt-miner:~#
