@@ -7,6 +7,7 @@ Motivation:
 I was getting tired of the BAMT flavor of the month club and wanted to be able to mine any algorythm type and easily switch between them while preserving the core functionality of BAMT itself.
 
 Authored by neurocis <neurocis@gmail.com>, released under GPLv3.
+
 BTC: 1DDqzhbbeKCm84SffUsDqbYH5FhGcJ33dy
 
 
@@ -44,6 +45,27 @@ coinvert mine auto-api can be placed in a cron job to poll and switch the miner 
 See script for operation, but is called by install to clone, configure and make a miner.
 
 
+Installation:
+=============
+
+    sudo su
+    #
+    # Depends on curl to grab aloryth score via JSON
+    apt-get install curl
+    #
+    # Depends on jq to parse JSON
+    # http://stedolan.github.io/jq/
+    cd /usr/bin
+    wget http://stedolan.github.io/jq/download/linux32/jq
+    chmod +x jq
+    #
+    # coinvert itself
+    cd /opt
+    git clone https://github.com/neurocis/coinvert.git
+    chmod +x /opt/coinvert/coinvert
+    ln -s /opt/coinvert/coinvert /usr/sbin/coinvert
+
+
 API based auto-switching:
 =========================
 
@@ -74,26 +96,6 @@ Once configured it can be tested with the command "coinvert mine autoapi", and f
     */5 * * * * root /opt/coinvert/coinvert mine autoapi >> /opt/coinvert/coinvert.log
 
 In this case I am also logging coinvert's actions to a log file in /opt/coinvert/coinvert.log (optional).
-
-Installation:
-=============
-
-    sudo su
-    #
-    # Depends on curl to grab aloryth score via JSON
-    apt-get install curl
-    #
-    # Depends on jq to parse JSON
-    # http://stedolan.github.io/jq/
-    cd /usr/bin
-    wget http://stedolan.github.io/jq/download/linux32/jq
-    chmod +x jq
-    #
-    # coinvert itself
-    cd /opt
-    git clone https://github.com/neurocis/coinvert.git
-    chmod +x /opt/coinvert/coinvert
-    ln -s /opt/coinvert/coinvert /usr/sbin/coinvert
 
 
 Sample:
