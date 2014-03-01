@@ -1,15 +1,12 @@
 coinvert
 ========
 
-coinvert facilitates easy switching of cgminer flavoured cryptocoin mining programs on linux (BAMT).
-
-Authored by neurocis <neurocis@gmail.com>, released under GPLv3
-BTC: 1DDqzhbbeKCm84SffUsDqbYH5FhGcJ33dy
-
-
 Motivation:
 
 I was getting tired of the BAMT flavor of the month club and wanted to be able to mine any algorythm type and easily switch between them while preserving the core functionality of BAMT itself.
+
+Authored by neurocis <neurocis@gmail.com>, released under GPLv3.
+BTC: 1DDqzhbbeKCm84SffUsDqbYH5FhGcJ33dy
 
 
 Usage:
