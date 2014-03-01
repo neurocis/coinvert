@@ -1,0 +1,222 @@
+#!/bin/bash
+# coinvert enables easy switching between cryptocoin miner applications on linux (BAMT in particular).
+# Once setup it can grab a JSON file with profitability scores and automatically switch the miner application based upon it.
+#
+# Authored by neurocis <neurocis@gmail.com>, released under GPLv3
+# BTC: 1DDqzhbbeKCm84SffUsDqbYH5FhGcJ33dy
+
+# General settings:
+DELTA="25"
+API_URL="url to api (json)"
+JQ_ALGO0=".[0] | .algo"
+JQ_SCOR0=".[0] | .score"
+JQ_ALGO1=".[1] | .algo"
+JQ_SCOR1=".[1] | .score"
+PATH_MINERS="/opt/miners"
+PATH_CONFIG="/etc/bamt"
+
+# Do not edit below ...
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+DATESTAMP="date --rfc-3339=seconds"
+
+if [ $# -lt 2 ]
+then
+        echo "Usage : $0 [install {miner}] | [link {algorythm} {miner}] | [mine {algorythm}|autoapi] | [make {git_url} {target_dir} {executable_name} {algorythm_name} {configure_parameters}]"
+        exit;
+fi
+
+case "$1" in
+"install")
+    case "$2" in
+    "cgminer-ckolivas")
+        REPO_URL="https://github.com/ckolivas/cgminer.git"
+        MINER_DIR="cgminer-ckolivas"
+        MINER_EXE="cgminer"
+        MINER_ALG="scrypt"
+        CONFIG_PARAMS=""
+    ;;
+    "sgminer")
+        REPO_URL="https://github.com/veox/sgminer.git"
+        MINER_DIR="sgminer"
+        MINER_EXE="sgminer"
+        MINER_ALG="scrypt"
+        CONFIG_PARAMS=""
+    ;;
+    "vertminer")
+        REPO_URL="https://github.com/Bufius/vertminer-gpu.git"
+        MINER_DIR="vertminer"
+        MINER_EXE="vertminer"
+        MINER_ALG="nscrypt"
+        CONFIG_PARAMS=""
+    ;;
+    "vertminer-thekev")
+        REPO_URL="https://github.com/thekev/vertminer-gpu.git"
+        MINER_DIR="vertminer-thekev"
+        MINER_EXE="vertminer"
+        MINER_ALG="nscrypt"
+        CONFIG_PARAMS=""
+    ;;
+    "cgminer-reorder")
+        REPO_URL="https://github.com/reorder/cgminer_keccak_3.6.git"
+        MINER_DIR="cgminer-reorder"
+        MINER_EXE="cgminer"
+        MINER_ALG="keccak"
+        CONFIG_PARAMS="--enable-keccak"
+    ;;
+    *)
+        echo "[ERROR] Unrecognized miner"
+        exit 1;
+    ;;
+    esac
+    $0 make $REPO_URL $MINER_DIR $MINER_EXE $MINER_ALG $CONFIG_PARAMS
+;;
+"link")
+    ALGO="$2"
+    MINER="$3"
+
+    if [ ! -d $PATH_MINERS/$3 ]; then
+        echo "[ERROR] Miner directory does not exist"
+        exit 1;
+    elif [ ! -f $PATH_MINERS/$3/.$2 ]; then
+        echo "[ERROR] Miner does not appear to be of the specified algorythm type"
+        exit 1;
+    fi
+
+    ln -nfs $PATH_MINERS/$3 $PATH_MINERS/algo-$2
+
+    echo "`$DATESTAMP` [INFO] Linked $PATH_MINERS/algo-$2 to $PATH_MINERS/$3"
+;;
+"mine")
+    case $2 in
+    "autoapi")
+        echo "`$DATESTAMP` [INFO] Retrieving algorythm scores from $API_URL"
+        ALGO_JSON="`curl -s "$API_URL"`"
+
+        ALGO0="`echo $ALGO_JSON | jq -r "$JQ_ALGO0"`"
+        SCOR0="`echo $ALGO_JSON | jq -r "$JQ_SCOR0"`"
+        ALGO1="`echo $ALGO_JSON | jq -r "$JQ_ALGO1"`"
+        SCOR1="`echo $ALGO_JSON | jq -r "$JQ_SCOR1"`"
+
+        echo "`$DATESTAMP` [INFO] Score: $SCOR0 - $ALGO0"
+        echo "`$DATESTAMP` [INFO] Score: $SCOR1 - $ALGO1"
+
+        if [ "`echo $SCOR0'>'$SCOR1'+'$DELTA | bc -l`" = "1" ]; then
+            ALGO="$ALGO0"
+        elif [ "`echo $SCOR1'>'$SCOR0'+'$DELTA | bc -l`" = "1" ]; then
+            ALGO="$ALGO1"
+        else
+            echo "`$DATESTAMP` [INFO] Difference below delta of $DELTA, set delta in $PATH_COINVERT/coinvert-auto script."
+            exit;
+        fi
+
+        echo "`$DATESTAMP` [INFO] Delta is greater than $DELTA - Coinverting to $ALGO."
+    ;;
+    *)
+        ALGO="$2"
+    ;;
+    esac
+
+    MINER_PID="`pidof cgminer`"
+
+    if [ ! -e $PATH_MINERS/algo-$ALGO ]; then
+        echo "[ERROR] No miner for $ALGO linked."
+        exit 1;
+    elif [ ! -e $PATH_CONFIG/algo-$ALGO.conf ]; then
+        echo "[ERROR] No configuration file at $PATH_CONFIG/algo-$ALGO.conf to link to, you need to create one."
+        exit 1;
+    elif [ "$MINER_PID" != ""  ] && [ -f $PATH_MINERS/cgminer/.$ALGO ]; then
+        echo "`$DATESTAMP` [INFO] Currently mining $ALGO, nothing to do."
+        exit;
+    fi
+
+    if [ -e $PATH_MINERS/cgminer ] && [ ! -h $PATH_MINERS/cgminer ]; then
+        if [ ! -e $PATH_MINERS/cgminer.bak ]; then
+            mv $PATH_MINERS/cgminer $PATH_MINERS/cgminer.bak
+            echo "`$DATESTAMP` [INFO] Moved $PATH_MINERS/cgminer to $PATH_MINERS/cgminer.bak to enable linking."
+        else
+            echo "`$DATESTAMP` [ERROR] Cannot move $PATH_MINERS/cgminer to $PATH_MINERS/cgminer.bak to enable linking - .bak directory exists."
+            exit 1;
+        fi
+    fi
+
+    if [ -e $PATH_CONFIG/cgminer.conf ] && [ ! -h $PATH_CONFIG/cgminer.conf ]; then
+        if [ ! -e $PATH_CONFIG/cgminer.conf.bak ]; then
+            mv $PATH_CONFIG/cgminer.conf $PATH_CONFIG/cgminer.conf.bak
+            echo "`$DATESTAMP` [INFO] Moved $PATH_CONFIG/cgminer.conf to $PATH_CONFIG/cgminer.conf.bak to enable linking."
+        else
+            echo "`$DATESTAMP` [ERROR] Cannot move $PATH_CONFIG/cgminer.conf to $PATH_CONFIG/cgminer.conf.bak to enable linking - .bak directory exists."
+            exit 1;
+        fi
+    fi
+
+    ln -nfs $PATH_CONFIG/algo-$ALGO.conf $PATH_CONFIG/cgminer.conf
+    ln -nfs $PATH_MINERS/algo-$ALGO $PATH_MINERS/cgminer
+
+    echo "`$DATESTAMP` [INFO] Linked $PATH_MINERS/cgminer and $PATH_CONFIG/cgminer.conf to mine $ALGO."
+
+    sleep 3; # Helps prevent mining monitors from restarting miner at the same time.
+
+    echo "`$DATESTAMP` [INFO] Killing miner process $MINER_PID"
+    pkill cgminer
+    sleep 5
+    MINER_PID="`pidof cgminer`"
+    if [ "$MINER_PID" != "" ]; then
+        echo "`$DATESTAMP` [ERROR] Failed to kill miner process $MINER_PID - Something is wrong !!!"
+        exit 1;
+    fi
+
+    export DISPLAY=:0
+    export GPU_USE_SYNC_OBJECTS=1
+    export GPU_MAX_ALLOC_PERCENT=100
+    cd $PATH_MINERS/cgminer
+    screen -d -m -S cgminer $PATH_MINERS/cgminer/cgminer -c $PATH_CONFIG/cgminer.conf
+
+    MINER_PID="`pidof cgminer`"
+    echo "`$DATESTAMP` [INFO] Miner started (PID: $MINER_PID)"
+;;
+"make")
+    REPO_URL="$2"
+    MINER_DIR="$3"
+    MINER_EXE="$4"
+    MINER_ALG="$5"
+    CONFIG_PARAMS="$6"
+
+    if [ -d $PATH_MINERS/$MINER_DIR ]; then
+        echo "[ERROR] Miner $PATH_MINERS/$MINER_DIR already exists."
+        exit 1;
+    elif [ ! -f $PATH_MINERS/cgminer/ADL_SDK/adl_sdk.h ]; then
+        echo "[ERROR] Cannot locate the ADL_SDK in $PATH_MINERS/cgminer/ADL_SDK/"
+        exit 1;
+    fi
+
+    # Check repo exists
+    git ls-remote "$REPO_URL" &> /dev/null
+    if [ "$?" -ne 0 ]; then
+        echo "[ERROR] Unable to read from $REPO_URL"
+        exit 1;
+    fi
+
+    # GIT Clone source configure, make & link to cgminer
+    cd /opt/miners
+    git clone $REPO_URL $PATH_MINERS/$MINER_DIR
+    cp -R $PATH_MINERS/cgminer/ADL_SDK/* $PATH_MINERS/$MINER_DIR/ADL_SDK/
+    cd $PATH_MINERS/$MINER_DIR
+
+    libtoolize
+    autoreconf -ivf
+    CFLAGS="-O2 -Wall -march=native" ./configure $CONFIG_PARAMS
+    make
+
+    # Link to cgminer the miner executable if needed
+    if [ "$MINER_EXE" != "" ] && [ "$MINER_EXE" != "cgminer" ]; then
+        ln -nfs $PATH_MINERS/$MINER_DIR/$MINER_EXE $PATH_MINERS/$MINER_DIR/cgminer
+    fi
+
+    # Touch file which indicates the miners algorythm type
+    touch $PATH_MINERS/$MINER_DIR/.$MINER_ALG
+;;
+*)
+    echo "[ERROR] Invalid argument. 'install', 'link', 'mine' and 'make' are valid subcommands."
+    exit 1;
+;;
+esac
