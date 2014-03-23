@@ -6,14 +6,16 @@
 # BTC: 1DDqzhbbeKCm84SffUsDqbYH5FhGcJ33dy
 
 # General settings:
-DELTA="25"
-API_URL="url to api (json)"
+DELTA="5"
+API_URL="https://pool.trademybit.com/api/bestalgo?key=xxxx"
 JQ_ALGO0=".[0] | .algo"
 JQ_SCOR0=".[0] | .score"
 JQ_ALGO1=".[1] | .algo"
 JQ_SCOR1=".[1] | .score"
 PATH_MINERS="/opt/miners"
 PATH_CONFIG="/etc/bamt"
+AUTOCRON_INTERVAL="5"
+LOGFILE="/opt/coinvert/coinvert.log"
 
 # Do not edit below ...
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
@@ -21,8 +23,12 @@ DATESTAMP="date --rfc-3339=seconds"
 
 if [ $# -lt 2 ]
 then
-        echo "Usage : $0 [install {miner}] | [link {algorythm} {miner}] | [mine {algorythm}|autoapi] | [make {git_url} {target_dir} {executable_name} {algorythm_name} {configure_parameters}]"
-        exit;
+    echo "Usage : $0 [install {miner}] | "
+    echo "           [link {algorythm} {miner}] | "
+    echo "           [mine {algorythm}|autoapi] | "
+    echo "           [autocron enable|disable|status] |"
+    echo "           [make {git_url} {target_dir} {executable_name} {algorythm_name} {configure_parameters}]"
+    exit;
 fi
 
 case "$1" in
@@ -63,6 +69,13 @@ case "$1" in
         MINER_ALG="keccak"
         CONFIG_PARAMS="--enable-keccak"
     ;;
+    "sgminer-sph")
+        REPO_URL="https://github.com/prettyhatemachine/sph-sgminer.git"
+        MINER_DIR="sgminer-sph"
+        MINER_EXE="sgminer"
+        MINER_ALG="sph"
+        CONFIG_PARAMS=""
+    ;;
     *)
         echo "[ERROR] Unrecognized miner"
         exit 1;
@@ -85,6 +98,7 @@ case "$1" in
     ln -nfs $PATH_MINERS/$3 $PATH_MINERS/algo-$2
 
     echo "`$DATESTAMP` [INFO] Linked $PATH_MINERS/algo-$2 to $PATH_MINERS/$3"
+    echo ""
 ;;
 "mine")
     case $2 in
@@ -100,16 +114,20 @@ case "$1" in
         echo "`$DATESTAMP` [INFO] Score: $SCOR0 - $ALGO0"
         echo "`$DATESTAMP` [INFO] Score: $SCOR1 - $ALGO1"
 
-        if [ "`echo $SCOR0'>'$SCOR1'+'$DELTA | bc -l`" = "1" ]; then
+        if [ "`echo $SCOR0'>'$SCOR1 | bc -l`" = "1" ]; then
             ALGO="$ALGO0"
-        elif [ "`echo $SCOR1'>'$SCOR0'+'$DELTA | bc -l`" = "1" ]; then
+            DIFF="`echo '(('$SCOR0'-'$SCOR1')/'$SCOR0')*100' | bc -l`"
+        elif [ "`echo $SCOR1'>'$SCOR0 | bc -l`" = "1" ]; then
             ALGO="$ALGO1"
-        else
-            echo "`$DATESTAMP` [INFO] Difference below delta of $DELTA, set delta in $PATH_COINVERT/coinvert-auto script."
+            DIFF="`echo '(('$SCOR1'-'$SCOR0')/'$SCOR1')*100' | bc -l`"
+        fi
+
+        if [ "`echo $DIFF'<'$DELTA | bc -l`" = "1" ]; then
+            echo "`$DATESTAMP` [INFO] Difference: $DIFF% < $DELTA%, not coinverting."
             exit;
         fi
 
-        echo "`$DATESTAMP` [INFO] Delta is greater than $DELTA - Coinverting to $ALGO."
+        echo "`$DATESTAMP` [INFO] Difference: $DIFF% > $DELTA%, coinverting to $ALGO."
     ;;
     *)
         ALGO="$2"
@@ -124,7 +142,7 @@ case "$1" in
     elif [ ! -e $PATH_CONFIG/algo-$ALGO.conf ]; then
         echo "[ERROR] No configuration file at $PATH_CONFIG/algo-$ALGO.conf to link to, you need to create one."
         exit 1;
-    elif [ "$MINER_PID" != ""  ] && [ -f $PATH_MINERS/cgminer/.$ALGO ]; then
+    elif [ "$3" != "force" ] && [ "$MINER_PID" != ""  ] && [ -f $PATH_MINERS/cgminer/.$ALGO ]; then
         echo "`$DATESTAMP` [INFO] Currently mining $ALGO, nothing to do."
         exit;
     fi
@@ -171,8 +189,37 @@ case "$1" in
     cd $PATH_MINERS/cgminer
     screen -d -m -S cgminer $PATH_MINERS/cgminer/cgminer -c $PATH_CONFIG/cgminer.conf
 
+    sleep 1
     MINER_PID="`pidof cgminer`"
     echo "`$DATESTAMP` [INFO] Miner started (PID: $MINER_PID)"
+    echo ""
+;;
+"autocron")
+    case $2 in
+    "enable")
+        if [ -e /etc/cron.d/coinvert ]; then
+            rm /etc/cron.d/coinvert
+        fi
+        echo "# /etc/cron.d/coinvert: crontab fragment for coinvert" > /etc/cron.d/coinvert
+        echo "#  This will run the cronjob script for coinvert to automatically switch between miner types." >> /etc/cron.d/coinvert
+        echo "*/$AUTOCRON_INTERVAL * * * * root /opt/coinvert/coinvert mine autoapi >> $LOGFILE" >> /etc/cron.d/coinvert
+        echo "`$DATESTAMP` [INFO] coinvert cron job enabled @ $AUTOCRON_INTERVAL min intervals."
+    ;;
+    "disable")
+        if [ -e /etc/cron.d/coinvert ]; then
+            rm /etc/cron.d/coinvert
+        fi
+        echo "`$DATESTAMP` [INFO] coinvert cron job disabled."
+    ;;
+    *)
+        if [ -e /etc/cron.d/coinvert ]; then
+            echo "`$DATESTAMP` [INFO] coinvert cron job exists @ $AUTOCRON_INTERVAL min intervals (enabled)"
+        else
+            echo "`$DATESTAMP` [INFO] coinvert cron job does not exist (disabled)"
+        fi
+    ;;
+    esac
+    echo ""
 ;;
 "make")
     REPO_URL="$2"
@@ -214,9 +261,11 @@ case "$1" in
 
     # Touch file which indicates the miners algorythm type
     touch $PATH_MINERS/$MINER_DIR/.$MINER_ALG
+    echo ""
 ;;
 *)
     echo "[ERROR] Invalid argument. 'install', 'link', 'mine' and 'make' are valid subcommands."
-    exit 1;
+    echo ""
 ;;
 esac
+
