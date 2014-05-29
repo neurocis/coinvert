@@ -7,11 +7,15 @@
 
 # General settings:
 DELTA="5"
-API_URL="https://pool.trademybit.com/api/bestalgo?key=xxxx"
+API_URL="https://pool.trademybit.com/api/bestalgo?key=8b103f13931f6a2b46f520be55d62ab90285e437922bd70b518b2aeca7cc6cef"
 JQ_ALGO0=".[0] | .algo"
 JQ_SCOR0=".[0] | .score"
 JQ_ALGO1=".[1] | .algo"
 JQ_SCOR1=".[1] | .score"
+JQ_ALGO2=".[2] | .algo"
+JQ_SCOR2=".[2] | .score"
+JQ_ALGO3=".[3] | .algo"
+JQ_SCOR3=".[3] | .score"
 PATH_MINERS="/opt/miners"
 PATH_CONFIG="/etc/bamt"
 AUTOCRON_INTERVAL="5"
@@ -73,7 +77,21 @@ case "$1" in
         REPO_URL="https://github.com/prettyhatemachine/sph-sgminer.git"
         MINER_DIR="sgminer-sph"
         MINER_EXE="sgminer"
-        MINER_ALG="sph"
+        MINER_ALG="x11"
+        CONFIG_PARAMS=""
+    ;;
+    "sgminer-lasybear-x11")
+        REPO_URL="https://github.com/lasybear/sph-sgminer_x11mod.git"
+        MINER_DIR="sgminer-sph-lasybear-x11"
+        MINER_EXE="sgminer"
+        MINER_ALG="x11"
+        CONFIG_PARAMS=""
+    ;;
+    "sgminer-lasybear-x13")
+        REPO_URL="https://github.com/lasybear/sph-sgminer_x11mod.git"
+        MINER_DIR="sgminer-sph-lasybear-x13"
+        MINER_EXE="sgminer"
+        MINER_ALG="x13"
         CONFIG_PARAMS=""
     ;;
     *)
@@ -110,10 +128,17 @@ case "$1" in
         SCOR0="`echo $ALGO_JSON | jq -r "$JQ_SCOR0"`"
         ALGO1="`echo $ALGO_JSON | jq -r "$JQ_ALGO1"`"
         SCOR1="`echo $ALGO_JSON | jq -r "$JQ_SCOR1"`"
+        ALGO2="`echo $ALGO_JSON | jq -r "$JQ_ALGO2"`"
+        SCOR2="`echo $ALGO_JSON | jq -r "$JQ_SCOR2"`"
+        ALGO3="`echo $ALGO_JSON | jq -r "$JQ_ALGO3"`"
+        SCOR3="`echo $ALGO_JSON | jq -r "$JQ_SCOR3"`"
 
         echo "`$DATESTAMP` [INFO] Score: $SCOR0 - $ALGO0"
         echo "`$DATESTAMP` [INFO] Score: $SCOR1 - $ALGO1"
+        echo "`$DATESTAMP` [INFO] Score: $SCOR2 - $ALGO2"
+        echo "`$DATESTAMP` [INFO] Score: $SCOR3 - $ALGO3"
 
+	#Some day update to look at all 4 scores, and better know what we are mining.
         if [ "`echo $SCOR0'>'$SCOR1 | bc -l`" = "1" ]; then
             ALGO="$ALGO0"
             DIFF="`echo '(('$SCOR0'-'$SCOR1')/'$SCOR0')*100' | bc -l`"
